@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <title>LexSim Pro — Simulateur Juridique Droit des Affaires</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -231,6 +232,21 @@ table.leg tr:hover td{background:var(--bg3)}
 .pg-fade{animation:fade .15s ease}
 @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 
+/* AUTH */
+.auth-wrap{max-width:440px;margin:60px auto;padding:0 16px}
+.auth-logo{text-align:center;margin-bottom:28px}
+.auth-logo .logo{font-size:22px;letter-spacing:3px}
+.auth-tab{display:flex;gap:0;margin-bottom:20px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.auth-tab button{flex:1;padding:9px;border:none;background:var(--bg3);color:var(--text2);font-family:Georgia,serif;font-size:13px;cursor:pointer;transition:all .15s}
+.auth-tab button.on{background:var(--gold);color:#0a0c0f;font-weight:600}
+.auth-field{margin-bottom:12px}
+.auth-field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:4px}
+.auth-field input{width:100%;padding:9px 12px;font-size:14px}
+.auth-err{color:var(--red2);font-size:12px;margin-top:8px;min-height:16px}
+.user-bar{display:flex;align-items:center;gap:8px;padding:4px 12px;background:var(--bg3);border-radius:20px;font-size:11px;color:var(--text2)}
+.user-bar strong{color:var(--gold)}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--gold);color:#0a0c0f;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;animation:fade .2s ease;box-shadow:0 4px 20px rgba(201,162,39,.4)}
+.toast.err{background:var(--red2);color:#fff}
 /* RESPONSIVE ADJUSTMENTS */
 @media(max-width:900px){.g2,.g3,.g4{grid-template-columns:1fr}.ed-meta{grid-template-columns:1fr 1fr}}
 @media(max-width:700px){.shell{grid-template-columns:200px 1fr}}
@@ -261,6 +277,7 @@ table.leg tr:hover td{background:var(--bg3)}
     <div class="ni on" id="ni-dashboard" onclick="nav('dashboard')"><div class="ni-ic">⊞</div>Tableau de bord</div>
     <div class="ni" id="ni-services" onclick="nav('services')"><div class="ni-ic">🏛</div>Services juridiques</div>
     <div class="ni" id="ni-workspace" onclick="nav('workspace')"><div class="ni-ic">✎</div>Rédaction</div>
+    <div class="ni" id="ni-mydocs" onclick="nav('mydocs')"><div class="ni-ic">💾</div>Mes documents</div>
     <div class="ni" id="ni-dossiers" onclick="nav('dossiers')"><div class="ni-ic">📁</div>Dossiers actifs <span class="ni-badge">28</span></div>
     <div class="ni" id="ni-inbox" onclick="nav('inbox')"><div class="ni-ic">📬</div>Courrier <span class="ni-badge">15</span></div>
     <div class="ni" id="ni-calendar" onclick="nav('calendar')"><div class="ni-ic">📅</div>Agenda &amp; délais</div>
@@ -299,12 +316,273 @@ table.leg tr:hover td{background:var(--bg3)}
   </div>
 </div>
 
-<script> const SUPA_URL = 'https://delszdqoztzffyooxzqz.supabase.co';
-const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlbHN6ZHFvenR6ZmZ5b294enF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxODQ1NzEsImV4cCI6MjA4OTc2MDU3MX0.YkU24lllaFYZJMytylpYPGXhkWyrd18hWG2Qt6dd394
-';
+<script>
 // ═══════════════════════════════════════════════════
 // DATA
 // ═══════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════
+// SUPABASE — CONFIGURATION
+// Remplacez les valeurs ci-dessous par vos clés Supabase
+// Settings → API → Project URL + anon public key
+// ═══════════════════════════════════════════════════
+const SUPA_URL = 'https://delszdqoztzffyooxzqz.supabase.co';   // ex: https://abcdefgh.supabase.co
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRlbHN6ZHFvenR6ZmZ5b294enF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxODQ1NzEsImV4cCI6MjA4OTc2MDU3MX0.YkU24lllaFYZJMytylpYPGXhkWyrd18hWG2Qt6dd394';      // ex: eyJhbGci...
+
+const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+// ═══════════════════════════════════════════════════
+// AUTH — Connexion / Inscription / Déconnexion
+// ═══════════════════════════════════════════════════
+async function authLogin(email, pwd) {
+  setAuthLoading(true);
+  const { data, error } = await supa.auth.signInWithPassword({ email, password: pwd });
+  setAuthLoading(false);
+  if (error) { setAuthErr(error.message); return; }
+  S.user = data.user;
+  showToast('✓ Connecté — Bienvenue sur LexSim Pro');
+  // Vérifier session Supabase au chargement
+(async () => {
+  const { data } = await supa.auth.getSession();
+  if (data?.session?.user) {
+    S.user = data.session.user;
+    await loadProfile();
+    await loadDocuments();
+    nav('dashboard');
+  } else {
+    S.page = 'login';
+    renderPage();
+  }
+  // Écouter les changements d'auth (login/logout dans d'autres onglets)
+  supa.auth.onAuthStateChange(async (event, session) => {
+    S.user = session?.user || null;
+    if (S.user) { await loadProfile(); await loadDocuments(); nav('dashboard'); }
+    else { S.userProfile = null; S.page = 'login'; renderPage(); }
+  });
+})();
+}
+
+async function authRegister(email, pwd, nom, org) {
+  if (!email || !pwd || !nom) { setAuthErr('Tous les champs sont obligatoires'); return; }
+  if (pwd.length < 8) { setAuthErr('Mot de passe minimum 8 caractères'); return; }
+  setAuthLoading(true);
+  const { data, error } = await supa.auth.signUp({ email, password: pwd });
+  setAuthLoading(false);
+  if (error) { setAuthErr(error.message); return; }
+  if (data.user) {
+    await supa.from('profiles').upsert({ id: data.user.id, email, nom, organisation: org });
+    S.user = data.user;
+    S.userProfile = { nom, organisation: org };
+    showToast('✓ Compte créé — Bienvenue ' + nom + ' !');
+    nav('dashboard');
+  } else {
+    setAuthErr('Vérifiez votre email pour confirmer votre compte');
+  }
+}
+
+async function authLogout() {
+  await supa.auth.signOut();
+  S.user = null;
+  S.userProfile = null;
+  S.savedDocs = [];
+  showToast('Déconnecté');
+  renderPage();
+}
+
+async function loadProfile() {
+  if (!S.user) return;
+  const { data } = await supa.from('profiles').select('*').eq('id', S.user.id).single();
+  if (data) S.userProfile = data;
+}
+
+function setAuthErr(msg) {
+  const el = document.getElementById('auth-err');
+  if (el) el.textContent = msg;
+}
+
+function setAuthLoading(on) {
+  const btn = document.getElementById('auth-btn');
+  if (btn) { btn.disabled = on; btn.textContent = on ? 'Chargement…' : btn.dataset.label; }
+}
+
+// ═══════════════════════════════════════════════════
+// DOCUMENTS — Sauvegarde & Chargement
+// ═══════════════════════════════════════════════════
+async function saveDocument() {
+  if (!S.user) { showToast('Connectez-vous pour sauvegarder', true); return; }
+  const ed = document.getElementById('editor');
+  const titreEl = document.querySelector('.emf input');
+  if (!ed || !ed.textContent.trim()) { showToast('Le document est vide', true); return; }
+  const titre = titreEl?.value || 'Document sans titre — ' + new Date().toLocaleDateString('fr-FR');
+  const { error } = await supa.from('documents').upsert({
+    user_id: S.user.id,
+    titre,
+    contenu: ed.innerHTML,
+    service: S.service || '',
+    mission_id: S.editorTask || '',
+    updated_at: new Date().toISOString()
+  });
+  if (error) { showToast('Erreur sauvegarde : ' + error.message, true); return; }
+  showToast('✓ Document sauvegardé');
+  await loadDocuments();
+}
+
+async function loadDocuments() {
+  if (!S.user) return;
+  const { data } = await supa.from('documents')
+    .select('*').eq('user_id', S.user.id)
+    .order('updated_at', { ascending: false })
+    .limit(50);
+  S.savedDocs = data || [];
+}
+
+async function deleteDocument(id) {
+  if (!confirm('Supprimer ce document ?')) return;
+  await supa.from('documents').delete().eq('id', id);
+  showToast('Document supprimé');
+  await loadDocuments();
+  renderPage();
+}
+
+async function openSavedDoc(id) {
+  const doc = S.savedDocs.find(d => d.id === id);
+  if (!doc) return;
+  nav('workspace');
+  setTimeout(() => {
+    const ed = document.getElementById('editor');
+    const titreEl = document.querySelector('.emf input');
+    if (ed) ed.innerHTML = doc.contenu || '';
+    if (titreEl) titreEl.value = doc.titre || '';
+    updateWC();
+  }, 150);
+}
+
+// ═══════════════════════════════════════════════════
+// CONVERSATIONS IA — Sauvegarde & Chargement
+// ═══════════════════════════════════════════════════
+async function saveConversation(titre) {
+  if (!S.user || !S.chatHistory.length) return;
+  const { error } = await supa.from('conversations').insert({
+    user_id: S.user.id,
+    titre: titre || 'Conversation du ' + new Date().toLocaleDateString('fr-FR'),
+    messages: S.chatHistory
+  });
+  if (!error) showToast('✓ Conversation sauvegardée');
+}
+
+async function loadConversations() {
+  if (!S.user) return [];
+  const { data } = await supa.from('conversations')
+    .select('id, titre, created_at')
+    .eq('user_id', S.user.id)
+    .order('created_at', { ascending: false })
+    .limit(20);
+  return data || [];
+}
+
+// ═══════════════════════════════════════════════════
+// TOAST NOTIFICATION
+// ═══════════════════════════════════════════════════
+function showToast(msg, isErr) {
+  document.querySelectorAll('.toast').forEach(t => t.remove());
+  const t = document.createElement('div');
+  t.className = 'toast' + (isErr ? ' err' : '');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(),300); }, 2500);
+}
+
+// ═══════════════════════════════════════════════════
+// PAGE LOGIN / REGISTER
+// ═══════════════════════════════════════════════════
+function pgLogin() {
+  const isReg = S.authMode === 'register';
+  return `
+<div class="auth-wrap">
+  <div class="auth-logo">
+    <div class="logo">Lex<span>Sim</span> <span style="color:var(--teal2)">Pro</span></div>
+    <p class="small muted mt8">Plateforme juridique professionnelle</p>
+  </div>
+  <div class="card">
+    <div class="card-bd">
+      <div class="auth-tab">
+        <button class="${!isReg?'on':''}" data-label="Se connecter" id="auth-btn-login" onclick="S.authMode='login';renderPage()">Se connecter</button>
+        <button class="${isReg?'on':''}" data-label="Créer un compte" id="auth-btn-reg" onclick="S.authMode='register';renderPage()">Créer un compte</button>
+      </div>
+      ${isReg ? `
+      <div class="auth-field">
+        <label>Nom complet</label>
+        <input type="text" id="auth-nom" placeholder="Jean Dupont">
+      </div>
+      <div class="auth-field">
+        <label>Organisation</label>
+        <input type="text" id="auth-org" placeholder="Cabinet / Service / Entreprise">
+      </div>` : ''}
+      <div class="auth-field">
+        <label>Adresse email</label>
+        <input type="email" id="auth-email" placeholder="votre@email.com">
+      </div>
+      <div class="auth-field">
+        <label>Mot de passe ${isReg ? '(minimum 8 caractères)' : ''}</label>
+        <input type="password" id="auth-pwd" placeholder="••••••••" onkeydown="if(event.key==='Enter') authSubmit()">
+      </div>
+      <div class="auth-err" id="auth-err"></div>
+      <button class="btn btn-gold" style="width:100%;margin-top:12px;padding:10px" id="auth-btn" data-label="${isReg?'Créer mon compte':'Se connecter →'}" onclick="authSubmit()">
+        ${isReg ? 'Créer mon compte' : 'Se connecter →'}
+      </button>
+    </div>
+  </div>
+  <div class="small muted mt12" style="text-align:center">
+    LexSim Pro · Données sécurisées · Chiffrement TLS
+  </div>
+</div>`;
+}
+
+function authSubmit() {
+  const email = document.getElementById('auth-email')?.value?.trim();
+  const pwd   = document.getElementById('auth-pwd')?.value;
+  if (S.authMode === 'register') {
+    const nom = document.getElementById('auth-nom')?.value?.trim();
+    const org = document.getElementById('auth-org')?.value?.trim();
+    authRegister(email, pwd, nom, org);
+  } else {
+    authLogin(email, pwd);
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// PAGE MES DOCUMENTS SAUVEGARDÉS
+// ═══════════════════════════════════════════════════
+async function pgMyDocs() {
+  await loadDocuments();
+  const docs = S.savedDocs;
+  return `
+<div class="ph flex aic jsb" style="display:flex">
+  <div><h2>Mes documents</h2><p>${docs.length} document${docs.length>1?'s':''} sauvegardé${docs.length>1?'s':''}</p></div>
+  <button class="btn btn-gold" onclick="nav('workspace')">+ Nouveau document</button>
+</div>
+${docs.length === 0 ? `
+<div class="alert ai">
+  Vous n'avez pas encore de documents sauvegardés. 
+  <button class="btn btn-sm btn-gold" onclick="nav('workspace')" style="margin-left:12px">Commencer à rédiger →</button>
+</div>` : docs.map(d => `
+<div class="card mb10" style="cursor:pointer" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
+  <div class="card-hd">
+    <div onclick="openSavedDoc('${d.id}')" style="flex:1">
+      <div class="card-title">📄 ${d.titre || 'Sans titre'}</div>
+      <div class="small muted">
+        ${d.service ? `<span class="tag">${d.service}</span>` : ''}
+        Modifié le ${new Date(d.updated_at).toLocaleDateString('fr-FR')} à ${new Date(d.updated_at).toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'})}
+      </div>
+    </div>
+    <div class="flex gap8">
+      <button class="btn btn-gold btn-sm" onclick="openSavedDoc('${d.id}')">✎ Ouvrir</button>
+      <button class="btn btn-sm" style="color:var(--red2)" onclick="deleteDocument('${d.id}')">✕ Supprimer</button>
+    </div>
+  </div>
+</div>`).join('')}`;
+}
+
 
 const SERVICES = [
   {id:'mairie',icon:'🏛',label:'Mairie / Collectivité territoriale',short:'DGAJ — Direction des Affaires Juridiques',badge:'b-blue',
@@ -1429,13 +1707,24 @@ const S = {
   checks: {},
   chatHistory: [],
   chatLoading: false,
-  savedDocs: []
+  savedDocs: [],
+  user: null,
+  userProfile: null,
+  authMode: 'login'
 };
 
 // ═══════════════════════════════════════════════════
 // NAVIGATION
 // ═══════════════════════════════════════════════════
 function nav(p) {
+  // Pages accessibles sans connexion
+  const publicPages = ['login'];
+  if (!S.user && !publicPages.includes(p)) {
+    S.page = 'login';
+    document.querySelectorAll('.ni').forEach(el => el.classList.remove('on'));
+    renderPage();
+    return;
+  }
   S.page = p;
   document.querySelectorAll('.ni').forEach(el => {
     el.classList.toggle('on', el.id === 'ni-' + p);
@@ -1457,12 +1746,29 @@ function setSvc(id) {
 // RENDER ENGINE
 // ═══════════════════════════════════════════════════
 function renderPage() {
+  const userTopbar = document.getElementById('user-topbar');
+  const userSbar   = document.getElementById('user-sbar');
+  if (userTopbar) {
+    if (S.user) {
+      const nom = S.userProfile?.nom || S.user.email?.split('@')[0] || 'Utilisateur';
+      userTopbar.innerHTML = `<div class="user-bar"><span>👤</span><strong>${nom}</strong></div><button class="tnbtn" onclick="authLogout()" style="color:var(--red2);margin-left:4px">Déconnexion</button>`;
+    } else {
+      userTopbar.innerHTML = `<button class="tnbtn gold" onclick="nav('login')">Se connecter</button>`;
+    }
+  }
+  if (userSbar) {
+    if (S.user) {
+      const nom = S.userProfile?.nom || S.user.email || '';
+      const org = S.userProfile?.organisation || '';
+      userSbar.innerHTML = `<div class="small" style="color:var(--gold)">${nom}</div>${org?`<div class="small muted">${org}</div>`:''}`;
+    } else { userSbar.innerHTML = ''; }
+  }
   const m = document.getElementById('main');
   const pages = {
     dashboard: pgDashboard, services: pgServices, workspace: pgWorkspace,
     dossiers: pgDossiers, inbox: pgInbox, calendar: pgCalendar,
     ia: pgIA, cases: pgCases, templates: pgTemplates, scoring: pgScoring,
-    marches: pgMarches, library: pgLibrary, sanctions: pgSanctions, glossary: pgGlossary,
+    login: pgLogin, mydocs: ()=>{ pgMyDocs().then(h=>{document.getElementById('main').querySelector('.pg').innerHTML=h}); return '<div class="pg pg-fade"><div class="muted small">Chargement…</div></div>'; }, marches: pgMarches, library: pgLibrary, sanctions: pgSanctions, glossary: pgGlossary,
     jurisprudence: pgJurisprudence
   };
   m.innerHTML = `<div class="pg pg-fade">${(pages[S.page] || pgDashboard)()}</div>`;
@@ -1475,6 +1781,7 @@ function renderPage() {
 // ═══════════════════════════════════════════════════
 
 function pgDashboard() {
+  if (!S.user) return pgLogin();
   const total = SERVICES.reduce((a, s) => a + s.tasks.length, 0);
   const urgent = DOSSIERS.filter(d => d.urg).length;
   const statCols = [
@@ -1646,6 +1953,7 @@ Utilisez les boutons de la barre d'outils pour formater votre texte.
 Consultez l'Assistant IA pour toute question juridique."></div>
   <div class="ed-foot">
     <span class="small muted" id="wc">0 mots</span>
+    <button class="btn btn-gold btn-sm" onclick="saveDocument()" style="margin-left:8px">💾 Sauvegarder</button>
     <div class="flex gap8">
       <button class="btn btn-sm" onclick="evalDoc()">★ Évaluer</button>
       <button class="btn btn-gold btn-sm" onclick="saveDoc()">💾 Sauvegarder</button>
